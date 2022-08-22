@@ -144,3 +144,136 @@ subject2.send(0)
 //5: dùng erased publisher để phát --> ko đc : vì không có function này
 
 
+//II. CUSTOM SUBSCRIBE
+
+/*Khai báo phải kế thừa lại protocol Subscriber, trong đó:
+Input là kiểu dữ liệu cho giá trị nhận được. Nó phải trùng với kiểu dữ liệu Output của Publisher.
+Failure là kiểu dữ liệu cho error. Nếu không bao giờ nhận được error thì sử dụng Never.
+Có 3 function tiếp theo cần phải implement:
+receive(subscription:) : khi nhận được subscription từ Publisher. Lúc này Subscriber vẫn có quyền quyết định việc lấy bao nhiêu dữ liệu từ Publisher
+receive(_ input:) : khi Publisher phát đi các dữ liệu thì Subscriber nhận được. Mỗi lần nhận như vậy thì Subscriber sẽ điều chỉnh lại việc request lấy thêm hay là không.
+ Đối tượng sử dụng là Demand.
+receive(completion:) : khi nhận được competion từ Publisher.
+ 
+ 
+ Khi bạn đã có 1 đối tượng Subscriber. Và muốn đăng kí tới Publisher thì sử dụng hàm subscribe của Publisher.
+ publisher.subscribe(subscriber)
+ 
+ Và chỉ lúc nào subscriber kết nối tới, khi đó publisher mới phát đi dữ liệu. Đây là điều cực kì quan trọng trong Combine.
+ Subscriber hỗ trợ việc tự huỷ khi subscription ngắt kết nối. Việc huỷ đó giúp cho bộ nhớ tự động giải phóng đi các đối tượng không cần thiết. Chúng ta có 2 kiểu huỷ:
+ Tự động huỷ thông AnyCancellable, đó là việc tạo ra các subscriber bằng sink hoặc assign
+ Huỷ bằng tay với việc subscriber gọi hàm cancel() của nó.
+ 
+ //2. Cách tạo Subscriber
+    2.1. Assign
+ */
+
+class Dog {
+  var name: String
+  
+  init(name: String) {
+    self.name = name
+  }
+}
+let dog = Dog(name: "Pochi")
+print("Dog name is \(dog.name)")
+
+let subscriber = Subscribers.Assign(object: dog, keyPath: \.name)
+
+//Tiến hành tạo publisher và phát dữ liệu đi.
+let publisher1 = Just("Milu")
+publisher1.subscribe(subscriber)
+print("Dog name is \(dog.name)")
+
+
+  // 2.2. Sink
+
+let subscriber2 = Subscribers.Sink<String, Never> { completed in
+    print(completed)
+} receiveValue: { name  in
+    dog.name = name
+}
+
+let publisher2 = PassthroughSubject<String, Never>()
+publisher2.subscribe(subscriber2)
+
+publisher2.send("Lu")
+print("Dog name is \(dog.name)")
+publisher2.send(completion: .finished)
+print("Dog name is \(dog.name)")
+
+/***____________**2.3. ANYCANCELABLE----__________
+ Đây là 1 type-erasing class nhằm tạo ra 1 đối tượng sẽ tự động huỷ. Khi nó huỷ thì các subscription sẽ bị huỷ theo. Và các Subscriber có implement nó cũng tự động huỷ theo.
+ Ngoài ra, nó còn cung cấp thêm 1 phương thức cancel để cho subscriber tuỳ ý tự huỷ.
+ Từ Publisher thì với 2 function của nó là sink và assign sẽ tạo ra đối tượng AnyCancellable.
+ 
+ */
+//sink đính kèm theo 1 subscriber là 1 closure để xử lý các giá trị nhận được
+let publisher4 = PassthroughSubject<String, Never>()
+let cancellable = publisher4.sink(receiveCompletion: { (completion) in
+  print(completion)
+}) { (name) in
+  dog.name = name
+}
+//assign  đưa dữ liệu phát ra tới property của 1 đối tượng.
+let publisher5 = PassthroughSubject<String, Never>()
+let cancellable1 = publisher4.assign(to: \.name, on: dog)
+
+//Và 1 điều cần chú ý là bạn không thể tạo ra nhiều đối tượng cancellable cho một lần subscribe . Việc quản lý từng đứa như vậy cũng khá vất vả. Tốt nhất bạn cần phải quản lý tập trung.
+var subscriptions1 = Set<AnyCancellable>()
+let publisher6 = PassthroughSubject<String, Never>()
+//subscription 1
+publisher6
+  .sink(receiveCompletion: { (completion) in
+    print(completion)
+  }) { (value) in
+    print(value)
+  }
+  .store(in: &subscriptions1)
+//subscription 2
+publisher6
+  .assign(to: \.name, on: dog)
+  .store(in: &subscriptions1)
+
+
+class ViewModel {
+  //...
+  var subscriptions = Set<AnyCancellable>()
+  
+  //...
+  deinit {
+    subscriptions.removeAll()
+  }
+}
+
+
+/*********3. CUSTOM SUBSCRIBER-----------------*/
+ /*3.1. Define Class
+  Đây là phần chính của bài. Khi bạn muốn thứ của riêng mình, thì sao không thử việc tạo 1 class Subscriber riêng.
+  Bắt đầu với việc define 1 class có tên là IntSubscriber kế thừa trực tiếp từ Subscriber
+  */
+final class IntSubscriber: Subscriber {
+  
+  typealias Input = Int
+  typealias Failure = Never
+  
+  func receive(subscription: Subscription) {
+    subscription.request(.max(1))
+  }
+  
+  func receive(_ input: Int) -> Subscribers.Demand {
+    print("Received value", input)
+    return .unlimited
+  }
+  
+  func receive(completion: Subscribers.Completion<Never>) {
+    print("Received completion", completion)
+  }
+}
+
+//Tiếp tục, tạo publisher và thử kết nối tới.
+let publisher7 = (1...10).publisher
+let subscriber4 = IntSubscriber()
+publisher7.subscribe(subscriber4)
+
+
