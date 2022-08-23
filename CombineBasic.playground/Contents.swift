@@ -607,3 +607,242 @@ let taps1 = PassthroughSubject<Int, Never>()
       isReady.send()
     }
   }
+
+
+//---------V.COMBINE – COMBINING OPERATORS --------
+
+//--------1. PREPENDING----------------
+//--------1.1. prepend(Output)
+let publisher9 = [3, 4].publisher
+    publisher9
+        .prepend(1, 2)
+        .prepend(-2, -1, 0)
+        .sink(receiveValue: { print($0) })
+        .store(in: &subscriptions)
+/*Xem đoạn code trên ta thấy:
+Có thể gọi prepend nhiều lần
+Không giới hạn số lượng giá trị truyền vào
+Cái sau sẽ in ra trước, nghĩa là: -2 -> -1 -> 0 -> 1 -> 2 -> 3 -> 4
+*/
+
+// -------1.2. prepend(Sequence)-------
+
+let publisher11 = [5, 6, 7].publisher
+  
+  publisher11
+    .prepend([3, 4])
+    .prepend(Set(1...2))
+    .prepend(stride(from: 6, to: 11, by: 2))
+    .sink(receiveValue: { print($0) })
+    .store(in: &subscriptions)
+
+//-------1.3. prepend(Publisher)------
+//2 toán tử trên thì bạn cần có dữ liệu có sẵn và không chủ động trong việc thay đổi. Còn với toán tử này sử dụng 1 publisher để chuẩn bị thì mọi việc có vẻ vui hơn
+//Nhìn qua thì khá dễ hiểu. publisher1 được chuẩn bị các giá trì từ publisher2. Nó sẽ in hết giá trị của publisher2 ra mới đến publisher1
+
+let publ1 = [3, 4].publisher
+let publ2 = [1, 2].publisher
+  
+  publ1
+    .prepend(publ2)
+    .sink(receiveValue: { print($0) })
+    .store(in: &subscriptions)
+
+//Tiếp tục nào:
+let publ3 = [3, 4].publisher
+let publ4 = PassthroughSubject<Int, Never>()
+  
+  publ3
+    .prepend(publ4)
+    .sink(receiveValue: { print($0) })
+    .store(in: &subscriptions)
+  publ4.send(1)
+  publ4.send(2)
+  publ4.send(completion: .finished)
+
+//Khi sử dụng prepend thì tới khi nào publisher trong tham số, có completion thì các giá trị của nó mới được phát đi. Sau đó mới tới các giá trị của publisher chính.
+
+
+//------------2.APPENDING------
+// Ngược lại với prepend thì append bổ sung các giá trị ra phía sau cùng cho publisher. Điều quan trọng là các giá trị đó sẽ được phát sau khi publisher phát đi completion.
+let publisher14 = PassthroughSubject<Int, Never>()
+  publisher14
+    .append(3, 4)
+    .append(5)
+    .sink(receiveValue: { print($0) })
+    .store(in: &subscriptions)
+  
+  publisher14.send(1)
+  publisher14.send(2)
+  publisher14.send(completion: .finished)
+
+
+//---------3. ADVANCED COMBINING ---------
+
+
+//--- 3.1. SWITCHTOLASTEST
+/*Dùng trong trường hợp kết hợp nhiều publisher. Và bạn chỉ cần publisher nào cuối cùng phát ra giá trị thì nhận nó.
+ */
+let publisher01 = PassthroughSubject<Int, Never>()
+  let publisher02 = PassthroughSubject<Int, Never>()
+  let publisher03 = PassthroughSubject<Int, Never>()
+  // 2
+  let publishers = PassthroughSubject<PassthroughSubject<Int, Never>, Never>()
+  // 3
+  publishers
+    .switchToLatest()
+    .sink(receiveCompletion: { _ in print("Completed!") },
+          receiveValue: { print($0) })
+    .store(in: &subscriptions)
+  // 4
+  publishers.send(publisher01)
+  publisher01.send(1)
+  publisher01.send(2)
+  // 5
+  publishers.send(publisher02)
+  publisher01.send(3)
+  publisher02.send(4)
+  publisher02.send(5)
+  // 6
+  publishers.send(publisher03)
+  publisher02.send(6)
+  publisher03.send(7)
+  publisher03.send(8)
+  publisher03.send(9)
+  // 7
+  publisher03.send(completion: .finished)
+  publishers.send(completion: .finished)
+
+
+//Tạo các publisher với Output là Int
+//Tạo 1 publisher để gọp các publisher kia, với Output chính là publisher với kiểu Output là Int
+//Sử dụng toán tử switchToLastest cho publishers và tiến hành subscription nó để in các giá trị nhận được
+//publishers send đi publisher1 –> publisher1 send đi 1 và 2 –> nhận được 1 & 2
+//publishers send đi publisher2 –> 1 phát 3, không nhận đc 3 –> 2 phát 4 & 5, nhận đc 4 & 5
+//Sau khi send publisher3 đi thì 2 phát 6 sẽ không nhận đc
+//Gởi kết thúc
+
+//Đoạn code ví dụ cho việc áp dụng vào bài toán thực tiễn trong ứng dụng. Khi nhấn vào nút download thì sẽ download 1 image. Nếu như nhấn liên tiếp rất nhiều lần thì sẽ lấy cái cuối cùng.
+let url = URL(string: "https://source.unsplash.com/random")!
+  // 1
+  func getImage() -> AnyPublisher<UIImage?, Never> {
+      return URLSession.shared
+                       .dataTaskPublisher(for: url)
+                       .map { data, _ in UIImage(data: data) }
+                       .print("image")
+                       .replaceError(with: nil)
+                       .eraseToAnyPublisher()
+  }
+  // 2
+  let taps2 = PassthroughSubject<Void, Never>()
+  taps2
+    .map { _ in getImage() } // 3
+    .switchToLatest() // 4
+    .sink(receiveValue: { _ in })
+    .store(in: &subscriptions)
+  // 5
+  taps2.send()
+  DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+    taps2.send()
+  }
+  DispatchQueue.main.asyncAfter(deadline: .now() + 3.1) {
+    taps2.send()
+  }
+
+
+//-------------3.2. MERGE(WITH:)-------------------
+let publisher04 = PassthroughSubject<Int, Never>()
+let publisher05 = PassthroughSubject<Int, Never>()
+ publisher04
+   .merge(with: publisher05)
+   .sink(receiveCompletion: { _ in print("Completed") },
+         receiveValue: { print($0) }).store(in: &subscriptions)
+ publisher04.send(1)
+ publisher05.send(2)
+ publisher05.send(3)
+ publisher04.send(4)
+ publisher05.send(5)
+ publisher04.send(completion: .finished)
+ publisher05.send(completion: .finished)
+
+//Tạo ra 2 em publisher
+//Merge em 2 và em 1
+//2 em thay nhau bắn cho tới khi kết thúc
+//Và khi nào cả 2 publisher kết thúc thì mới kết thúc chung
+
+
+// ------3.3. combineLastest----------------
+
+let publisher06 = PassthroughSubject<Int, Never>()
+let publisher07 = PassthroughSubject<String, Never>()
+  // 2
+  publisher06
+    .combineLatest(publisher07)
+    .sink(receiveCompletion: { _ in print("Completed") },
+          receiveValue: { print("P1: \($0), P2: \($1)") })
+    .store(in: &subscriptions)
+  // 3
+  publisher06.send(1)
+  publisher06.send(2)
+  
+  publisher07.send("a")
+  publisher07.send("b")
+  
+  publisher06.send(3)
+  
+  publisher07.send("c")
+  // 4
+  publisher06.send(completion: .finished)
+  publisher07.send(completion: .finished)
+
+//P1: 2, P2: a
+//P1: 2, P2: b
+//P1: 3, P2: b
+//P1: 3, P2: c
+//Completed
+
+/* Giải thích:
+Tạo ra 2 publisher với các kiểu Output lần lượt là Int & String
+Sử dụng toán tử combineLastest cho 2 publisher & subscription như bao lần trước đây
+Sử dụng publisher1 phát 1 và 2 -> không có gì xảy ra. Vì publisher2 chưa có giá trị nào hết
+Publisher2 bắn a & b -> nhận được 2,a và 2,b
+publisher1 bắn 3 -> nhận đc 3,b
+publisher2 bắn c -> nhận được 3,c
+Kết thúc cả 2 cùng kết liễu. */
+
+
+
+// ------3.4 ZIP-------------
+/*
+Đây là toán tử khá là thú vị, nó tương tự như kiểu Tuple trong Swift, bằng cách kết hợp nhiều kiểu giá trị lại với nhau.
+Còn trong Combine thì đó là sự kết hợp các Output của các publisher lại.
+Với zip thì nó sẽ chờ & nén từng cặp giá trị lại với nhau. Ví dụ:
+pub1 phát 1 & 2
+pub2 phát a & b
+nhận được 2 cái (1,a) & (2,b)
+Khi nào đủ Output thì nó sẽ phát cho subscriber các cặp giá trị.  */
+
+
+let publisher08 = PassthroughSubject<Int, Never>()
+let publisher09 = PassthroughSubject<String, Never>()
+publisher08
+  .zip(publisher09)
+  .sink(receiveCompletion: { _ in print("Completed") },
+        receiveValue: { print("P1: \($0), P2: \($1)") })
+  .store(in: &subscriptions)
+publisher08.send(1)
+publisher08.send(2)
+publisher09.send("a")
+publisher09.send("b")
+publisher08.send(3)
+publisher09.send("c")
+publisher09.send("d")
+publisher08.send(completion: .finished)
+publisher09.send(completion: .finished)
+
+//
+//Và đây là kết quả chương trình:
+//P1: 1, P2: a
+//P1: 2, P2: b
+//P1: 3, P2: c
+//Completed
