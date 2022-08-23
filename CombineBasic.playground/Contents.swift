@@ -277,3 +277,68 @@ let subscriber4 = IntSubscriber()
 publisher7.subscribe(subscriber4)
 
 
+/* III. COMBINE - TRANSFORMING OPERATORS*/
+
+//2. Collecting values
+//Với ví dụ trên, ta được 1 Array Int thay vì từng Int khi sử dụng .collect(). Còn nếu dùng collect(3), thì ta được mỗi giá trị là 1 Array Int với 3 phần tử Int.
+var subscriptions2 = Set<AnyCancellable>()
+let publisher8 = (1...99).publisher
+publisher8
+  .collect(10)
+  .sink(receiveCompletion: { complete in
+    print(complete)
+  }) { value in
+    print(value)
+  }
+  .store(in: &subscriptions2)
+
+
+//3. Map
+/*Giải thích:
+ Tạo ra một formatter của Number. Nhiệm vụ nó biến đổi từ số thành chữ
+ Tạo ra 1 publisher từ một array Integer
+ Sử dụng toán tử .map để biến đối tường giá trị nhận được thành kiểu string
+ Các toán tử còn lại thì như đã trình bày các phần trước rồi*/
+var subscriptions3 = Set<AnyCancellable>()
+let formatter = NumberFormatter()
+formatter.numberStyle = .spellOut
+    [22, 7, 1989].publisher
+        .map {
+            formatter.string(for: NSNumber(integerLiteral: $0)) ?? "" }
+        .sink(receiveValue: { print($0) })
+        .store(in: &subscriptions3)
+// 3.2. Map key path
+
+struct Dog1 {
+  var name: String
+  var age: Int
+}
+let publisher10 = [Dog1(name: "MiMi", age: 3),
+                 Dog1(name: "MiLy", age: 2),
+                 Dog1(name: "PoChi", age: 1),
+                 Dog1(name: "ChiPu", age: 3)].publisher
+publisher10
+  .map(\.name)
+  .sink(receiveValue: { print($0) })
+  .store(in: &subscriptions)
+//Ta có class Dog
+//Tạo 1 publisher từ việc biến đổi 1 Array Dog. Lúc này Output của publisher là Dog
+//Sử dụng map(\.name) để tạo 1 publisher mới với Output là String. String là kiểu dữ liệu cho thuộc tính name của class Dog
+//sink và store như bình thường
+
+// 3.3 tryMap
+
+/*Khi bạn làm những việc liên quan tới nhập xuất, kiểm tra, media, file … thì hầu như phải sử dụng try catch nhiều. Nó giúp cho việc đảm bảo chương trình của bạn không bị crash. Tất nhiên, nhiều lúc bạn phải cần biến đổi từ kiểu giá trị này tới một số kiểu giá trị mà có khả năng sinh ra lỗi. Khi đó bạn hãy dùng tryMap như một cứu cánh. */
+
+Just("Đây là đường dẫn tới file XXX nè")
+        .tryMap { try FileManager.default.contentsOfDirectory(atPath: $0) }
+        .sink(receiveCompletion: { print("Finished ", $0) },
+              receiveValue: { print("Value ", $0) })
+        .store(in: &subscriptions)
+
+//3.4 Flat Map
+
+/*map là toán tử biến đổi kiểu dữ liệu Output. Ví dụ: Int -> String…
+flatMap là toán tử biến đổi 1 publisher này thành 1 publisher khác*/
+
+
