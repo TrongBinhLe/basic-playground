@@ -434,3 +434,51 @@ publs.scan([]) { numbers, value -> [Int] in
     print($0)
     
 }
+
+//-----------IV> COMBINE – FILTERING OPERATORS-----------------
+
+/**---1.1FILTER
+ Sử dụng toán tử filter để tiến hành lọc các phần tử được phát ra từ publisher. Dễ hiểu nhất là thử làm việc với 1 closure trả về giá trị bool
+ **/
+
+let numbers = (1...10).publisher
+numbers
+    .filter { $0.isMultiple(of: 3) }
+    .sink { n in
+        print("\(n) is a multiple of 3!")
+    }
+    .store(in: &subscriptions)
+
+
+/*1.2.---------- REMOVE DUPLICATES*/
+//Chú ý, toán tử removeDuplicates chỉ bỏ đi các phần tử liên tiếp mà giống nhau, giữ lại duy nhất một phần tử. Còn nếu các phần tử giống nhau mà không liên tiếp thì vẫn bình thường.
+
+let words = "Hôm nay nay , trời trời nhẹ lên cao cao . Tôi Tôi buồn buồn không hiểu vì vì sao tôi tôi buồn."
+    .components(separatedBy: " ")
+    .publisher
+words
+    .removeDuplicates()
+    .sink(receiveValue: { print($0) })
+    .store(in: &subscriptions)
+
+/**2. ------------------COMPACTING AND IGNORE------------------*/
+//-----------2.1. COMPACTMAP ---------------
+//Hiểu đơn giản thì nó cũng như map, biến đổi các phần tử với kiểu giá trị này thành kiểu giá trị khác và lượt bỏ đi các giá trị không đạt theo điều kiện.
+
+let strings = ["a", "1.24", "3", "def", "45", "0.23"].publisher
+strings
+    .compactMap { Float($0) }
+    .sink(receiveValue: {  print($0) })
+    .store(in: &subscriptions)
+
+//----------2.2. IGNOREOUTPUT--------------
+/*Với toán tử ignoreOutput , thì sẽ loại trừ hết tất cả các phần tử được phát ra. Tới lúc nhận được completion thì sẽ kết thúc.*/
+let numb = (1...10_000_000).publisher
+numb
+    .ignoreOutput()
+    .sink(receiveCompletion: { print("Completed with: \($0)") }, receiveValue: { print($0) })
+    .store(in: &subscriptions)
+
+/*------------3. FINDING VALUES---------------*/
+
+//------3.1. first(where:)--------------------
