@@ -1,6 +1,7 @@
 import UIKit
 import Combine
 
+
 /*********PUBLISHER TU PRORERTY CUA CLASS-------------------------***************
  
  //Để tránh việc ảnh hưởng tới code cũ trong dự án của bạn. Thì Combine cũng cung cấp thêm 1 wrapper cho property là @Published.
@@ -840,9 +841,44 @@ publisher09.send("d")
 publisher08.send(completion: .finished)
 publisher09.send(completion: .finished)
 
-//
-//Và đây là kết quả chương trình:
-//P1: 1, P2: a
-//P1: 2, P2: b
-//P1: 3, P2: c
-//Completed
+/*
+Và đây là kết quả chương trình:
+P1: 1, P2: a
+P1: 2, P2: b
+P1: 3, P2: c
+Completed */
+
+// -------------VI.COMBINE – TIME MANIPULATION OPERATORS -------------------
+
+// --------------1. DELAY -----------------------
+
+let valuesPerSecond = 1.0
+let delayInSeconds = 2.0
+
+let sourcePublisher = PassthroughSubject<Date, Never>()
+let delayedPublisher = sourcePublisher.delay(for: .seconds(delayInSeconds), scheduler: DispatchQueue.main)
+
+// subcription
+
+sourcePublisher.sink { completed in
+    print("Source completed: ", completed)
+} receiveValue: { print("Source: ", $0) }.store(in: &subscriptions)
+
+delayedPublisher
+   .sink(receiveCompletion: { print("Delay complete: \($0) - \(Date()) ") }) { print("Delay: \($0) - \(Date()) ")}
+   .store(in: &subscriptions)
+
+//emit values by timer
+DispatchQueue.main.async {
+    Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+        sourcePublisher.send(Date())
+    }
+}
+
+/*Giải thích:
+sourcePublisher là 1 subject
+delayPublisher được tạo ra nhờ toán tử delay của publisher trên
+Tiến hành subscription và cứ mỗi giây cho sourcePublisher phát đi
+Thì sau 1 khoảng thời gian được cài đặt trên thì delayPublisher sẽ phát tiếp*/
+
+
