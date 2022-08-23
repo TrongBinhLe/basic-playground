@@ -396,3 +396,41 @@ chat
   .sink { print($0) }
   .store(in: &subscriptions)
 
+
+
+//--------4. REPLACING UPSTREAM OUTPUT --------
+//4.1. replaceNil(with:)
+["A",  nil, "B"].publisher
+        .replaceNil(with: "-")
+        .sink { print($0) }
+//4.2. replaceEmpty(with:)
+let empty = Empty<Int, Never>()
+    
+    empty
+        .replaceEmpty(with: 1)
+        .sink(receiveCompletion: { print($0) },
+              receiveValue: { print($0) })
+        .store(in: &subscriptions)
+
+//-------------5. SCAN----------------------
+/**Tạo 1 publisher bằng cách biến đổi 1 Array Integer từ 0 tới 5 thông qua toán tử publisher
+ Biển đổi từng phần tử của pub bằng toán tử scan với giá trị khởi tạo là 0
+ Scan sẽ phát ra các phần tử mới bằng cách kết hợp 2 giá trị lại
+ Cái khởi tạo là đầu tiên -> cái nhận được là thứ 2 -> cái tạo ra mới được phát đi và trở thành lại cái đầu tiên.*/
+//VD1
+let pub = (0...5).publisher
+    
+    pub
+        .scan(0) { $0 + $1 }
+        .sink { print ("\($0)", terminator: " ") }
+        .store(in: &subscriptions)
+
+//VD2
+
+let publs = (1...10).publisher
+publs.scan([]) { numbers, value -> [Int] in
+    numbers + [value]
+}.sink {
+    print($0)
+    
+}
