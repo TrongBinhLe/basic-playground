@@ -276,7 +276,7 @@ let publisher7 = (1...10).publisher
 let subscriber4 = IntSubscriber()
 publisher7.subscribe(subscriber4)
 
-
+//https://fxstudio.dev/combine-transforming-operators-trong-10-phut/
 /* III. COMBINE - TRANSFORMING OPERATORS*/
 
 //2. Collecting values
@@ -293,7 +293,7 @@ publisher8
   .store(in: &subscriptions2)
 
 
-//3. Map
+//3.----------------- Map ----------------------
 /*Giải thích:
  Tạo ra một formatter của Number. Nhiệm vụ nó biến đổi từ số thành chữ
  Tạo ra 1 publisher từ một array Integer
@@ -307,7 +307,7 @@ formatter.numberStyle = .spellOut
             formatter.string(for: NSNumber(integerLiteral: $0)) ?? "" }
         .sink(receiveValue: { print($0) })
         .store(in: &subscriptions3)
-// 3.2. Map key path
+// 3.2. -------------------- Map key path ---------------------
 
 struct Dog1 {
   var name: String
@@ -326,7 +326,7 @@ publisher10
 //Sử dụng map(\.name) để tạo 1 publisher mới với Output là String. String là kiểu dữ liệu cho thuộc tính name của class Dog
 //sink và store như bình thường
 
-// 3.3 tryMap
+// 3.3 -------------TRYMAP------------------------
 
 /*Khi bạn làm những việc liên quan tới nhập xuất, kiểm tra, media, file … thì hầu như phải sử dụng try catch nhiều. Nó giúp cho việc đảm bảo chương trình của bạn không bị crash. Tất nhiên, nhiều lúc bạn phải cần biến đổi từ kiểu giá trị này tới một số kiểu giá trị mà có khả năng sinh ra lỗi. Khi đó bạn hãy dùng tryMap như một cứu cánh. */
 
@@ -336,9 +336,63 @@ Just("Đây là đường dẫn tới file XXX nè")
               receiveValue: { print("Value ", $0) })
         .store(in: &subscriptions)
 
-//3.4 Flat Map
+//3.4 --------------- Flat Map -------------------
+/*
+ Trước tiên thì ta cần hệ thống lại một chú về em map và em flatMap
+ map là toán tử biến đổi kiểu dữ liệu Output. Ví dụ: Int -> String…
+ flatMap là toán tử biến đổi 1 publisher này thành 1 publisher khác
+ Mới hoàn toàn
+ Khác với thèn publisher gốc kia
+ Thường sử dụng flatMap để truy cập vào các thuộc tính trong của 1 publisher. Để hiểu thì bạn xem minh hoạ đoạn code sau:
+ Trước tiên tạo 1 struct là Chatter, trong đó có name và message. Chú ý, message là một CurrentValueSubject, nó chính là publisher.
+ */
 
-/*map là toán tử biến đổi kiểu dữ liệu Output. Ví dụ: Int -> String…
-flatMap là toán tử biến đổi 1 publisher này thành 1 publisher khác*/
+public struct Chatter {
+    public let name: String
+    public let message: CurrentValueSubject<String, Never>
+    public init (name: String, message: String) {
+        self.name = name
+        self.message = CurrentValueSubject(message)
+    }
+}
 
+let teo = Chatter(name:"Teo", message: "Teo join in room")
+let ti = Chatter(name: "Ti", message: "Ti join in room")
+
+let chat = PassthroughSubject<Chatter, Never>()
+chat.flatMap {
+    $0.message
+}.sink { value in
+    print(value)
+}
+
+chat.send(teo)
+  //2 : Tèo hỏi
+  teo.message.value = "TÈO: Tôi là ai? Đây là đâu?"
+  //3 : Tí vào room
+  chat.send(ti)
+  //4 : Tèo hỏi thăm
+  teo.message.value = "TÈO: Tí khoẻ không."
+  //5 : Tí trả lời
+  ti.message.value = "TÍ: Tao không khoẻ lắm. Bị Thuỷ đậu cmnr mày."
+  
+  let thuydau = Chatter(name: "Thuỷ đậu", message: " --- THUỶ ĐẬU đã vào room ---")
+  //6 : Thuỷ đậu vào room
+  chat.send(thuydau)
+  thuydau.message.value = "THUỶ ĐẬU: Các anh gọi em à."
+  
+  //7 : Tèo sợ
+  teo.message.value = "TÈO: Toang rồi."
+
+/*chat là 1 publisher, chúng ta send các giá trị của nó đi (Chatter). Đó là các phần tử được join vào room
+Vì mỗi phần tử đó có thuộc tính là 1 publisher (messgae). Để đối tượng chatter có thể phát tin nhắn đi, thay vì phải join lại room.  Nên khi subscribe nếu không dùng flatMap thì sẽ ko nhận được giá trị từ các stream của các publisher join vào trước.
+flatMap giúp cho việc hợp nhất các stream của các publisher thành 1 stream và đại diện chung là 1 publisher mới với kiểu khác các publisher kia.
+Tất nhiên, khi các publisher riêng lẻ send các giá trị đi, thì chat vẫn nhận được và hợp chất chúng lại cho subcriber của nó.
+Cuối câu chuyện bạn cũng thấy là THUỶ ĐẬU đã join vào. Vì vậy, muốn khống chế số lượng publisher thì sử dụng thêm tham số maxPublishers */
+
+
+chat
+  .flatMap(maxPublishers: .max(2)) { $0.message }
+  .sink { print($0) }
+  .store(in: &subscriptions)
 
