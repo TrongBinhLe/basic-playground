@@ -277,7 +277,7 @@ let subscriber4 = IntSubscriber()
 publisher7.subscribe(subscriber4)
 
 //https://fxstudio.dev/combine-transforming-operators-trong-10-phut/
-/* III. COMBINE - TRANSFORMING OPERATORS*/
+/*---------- III. COMBINE - TRANSFORMING OPERATORS----------------------*/
 
 //2. Collecting values
 //Với ví dụ trên, ta được 1 Array Int thay vì từng Int khi sử dụng .collect(). Còn nếu dùng collect(3), thì ta được mỗi giá trị là 1 Array Int với 3 phần tử Int.
@@ -482,3 +482,128 @@ numb
 /*------------3. FINDING VALUES---------------*/
 
 //------3.1. first(where:)--------------------
+/*
+ Ta có 1 Array Int từ 0 đến 9 và biến nó thành 1 publisher.
+ Sau đó dùng hàm print với tiền tố in ra là numbers –> để kiểm tra các giá trị có nhận được lần lượt hay không?
+ Sử dụng toán tử first để tìm giá trị đầu tiên phù hợp với điều kiện là chia hết cho 2
+ Sau đó subscription nó và in giá trị nhận được ra.
+ Ta thấy, sau khi gặp giá trị đầu tiền phù hợp điều kiện thì publisher sẽ gọi completion.
+ */
+let numbs = (1...9).publisher
+numbs
+  .print("numbers")
+  .first(where: { $0 % 2 == 0 })
+  .sink(receiveCompletion: { print("Completed with: \($0)") },
+        receiveValue: { print($0) })
+  .store(in: &subscriptions)
+
+//--------3.2. last(where:)----------------
+
+/*
+ Đối trọng lại với first. Sẽ tìm ra phần tử cuối cùng được phát đi phù hợp với điều kiện. Miễn là trước khi có completion
+ */
+let numbers1 = PassthroughSubject<Int, Never>()
+numbers1
+  .last(where: { $0 % 2 == 0 })
+  .sink(receiveCompletion: { print("Completed with: \($0)") },
+        receiveValue: { print($0) })
+  .store(in: &subscriptions)
+numbers1.send(1)
+numbers1.send(2)
+numbers1.send(3)
+numbers1.send(4)
+numbers1.send(5)
+numbers1.send(completion: .finished)
+
+
+//--------4.Dropping Values---------------
+// Các toán tử này sẽ giúp loại bỏ đi nhiều phần tử. Mà không cần quan tâm gì nhiều tới điều kiện. Chỉ quan tâm tới thứ tự và số lượng.
+
+//------- 4.1. dropFirst
+// Toán tử này sẽ có 1 tham số là số lượng các giá trị sẽ được bỏ đi. Với ví dụ trên thì phần tử thứ 9 sẽ được in ra, các phần tử trước nó sẽ bị loại bỏ đi.
+let numbers2 = ["a","b","c","e","f","g","h","i","k","l","m","n"].publisher
+    numbers2
+        .dropFirst(8)
+        .sink(receiveValue: { print($0) })
+        .store(in: &subscriptions)
+//--------4.2. drop(while:)-------------
+/*Toán tử này là phiên bản nâng cấp hơn. Khi bạn không xác định được số lượng các phần tử cần phải loại trừ đi. Thì sẽ đưa cho nó 1 điều kiện.
+ Và trong vòng while, thì phần tử nào thoả mãn điều kiện sẽ bị loại trừ. Cho đến khi gặp phần tử đầu tiên không toản mãn.
+ Từ phần tử đó trở về sau (cho đến lúc kết thúc) thì các subcribers sẽ nhận được các giá trị đó
+ */
+let numbers3 = (1...10).publisher
+numbers3
+  .drop(while: {
+    print("x")
+    return $0 % 5 != 0
+  })
+  .sink(receiveValue: { print($0) })
+  .store(in: &subscriptions)
+
+//-------4.3. drop(untilOutputFrom:) -------------
+/*Một bài toán được đưa ra như sau:
+Bạn tap liên tục vào một cái nút
+Lúc nào có trạng thái isReady thì sẽ nhận giá trị từ cái nút bấm đó*/
+let isReady = PassthroughSubject<Void, Never>()
+ let taps = PassthroughSubject<Int, Never>()
+ 
+ taps
+   .drop(untilOutputFrom: isReady)
+   .sink(receiveValue: { print($0) })
+   .store(in: &subscriptions)
+ 
+ (1...15).forEach { n in
+   taps.send(n)
+   
+   if n == 3 {
+     isReady.send()
+   }
+ }
+
+
+ /**
+  isReady là 1 subject. Với kiểu Void nên chi phát tín hiệu chứ không có giá trị được gởi đi
+  taps là một subject với Output là Int
+  Tiến hành subcription taps, trước đó thì gọi toán tử drop(untilOutputFrom:) để lắng nghe sự kiện phát ra từ isReady
+  For xem như là chạy liên tục, mỗi lần thì taps sẽ phát đi 1 giá trị
+  Với n == 3, thì isReady sẽ phát
+  */
+
+
+//------------5. Limiting values----------------
+/*
+ Đối trọng với drop thì toán tử prefix sẽ làm điều ngược lại ngược lại:
+ prefix(:) Giữ lại các phần tử từ lúc đầu tiên tới index đó (với index là tham số truyền vào)
+ prefix(while:) Giữ lại các phần tử cho đến khi điều kiện không còn thoả mãn nữa
+ prefix(untilOutputFrom:) Giữ lại các phần tử cho đến khi nhận được sự kiện phát của 1 publisher khác
+ */
+let numbers4 = (1...10).publisher
+  
+  numbers4
+    .prefix(2)
+    .sink(receiveCompletion: { print("Completed with: \($0)") },
+          receiveValue: { print($0) })
+    .store(in: &subscriptions)
+//Giữa lại 2 phần tử đầu tiên nhận được, các phần tử còn lại thì bỏ qua
+let numbers5 = (1...10).publisher
+  numbers5
+    .prefix(while: { $0 < 7 })
+    .sink(receiveCompletion: { print("Completed with: \($0)") },
+          receiveValue: { print($0) })
+    .store(in: &subscriptions)
+//Các phần tử đầu tiên mà bé hơn 7 thì sẽ được in ra. Tại phần tử nào mà đã thoả mãn điều kiện, thì từ đó trở về sau sẽ bị skip.
+let isReady1 = PassthroughSubject<Void, Never>()
+let taps1 = PassthroughSubject<Int, Never>()
+  taps
+    .prefix(untilOutputFrom: isReady1)
+    .sink(receiveCompletion: { print("Completed with: \($0)") },
+          receiveValue: { print($0) })
+    .store(in: &subscriptions)
+  
+  (1...15).forEach { n in
+    taps1.send(n)
+    
+    if n == 5 {
+      isReady.send()
+    }
+  }
