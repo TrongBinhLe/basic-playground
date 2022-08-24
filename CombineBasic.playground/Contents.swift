@@ -1035,6 +1035,53 @@ for item in typingHelloWord {
  15:59:41.7 - 🔵 : Hello Worl
  15:59:41.7 - 🔵 : Hello World
  15:59:42.7 - 🔴 : Hello World
-
  */
 
+// 3.2 THROTTLE
+/*
+ Cũng từ 1 publisher khác tạo ra, thông qua việc thực thi toán tử throttle
+ Cài đặt thêm giá trị thời gian điều tiết
+ Trong khoảng thời gian điều tiết này, thì nó sẽ nhận và phát giá trị đầu tiên hay mới nhất nhận được từ publisher gốc (dựa theo tham số latest quyết định)
+ */
+//create subject
+let subthrottle = PassthroughSubject<String, Never>()
+// throttle publshed
+let throttle = subthrottle.throttle(for: .seconds(1.0), scheduler: DispatchQueue.main, latest: true).share()
+
+subthrottle.sink { string in
+    print("\(printDate()) - 🔵 : \(string)")
+}.store(in: &subscriptions)
+
+throttle.sink { string in
+    print("\(printDate()) - 🔴 : \(string)")
+}.store(in: &subscriptions)
+
+for item1 in typingHelloWord {
+    DispatchQueue.main.asyncAfter(deadline: now + item1.0) {
+        subthrottle.send(item1.1)
+    }
+}
+
+/**
+ Giải thích:
+ Ở giây thứ 0.0 thì chưa có gì mới từ subject và throttle bắt đầu sau 1.0 giây
+ Tới thời điểm 1.0 thì có dữ liệu là Hello vì nó đc phát đi bởi subject ở 0.6
+ Nhưng tới 2.0 thì vẫn không có gì mới để throttle phát đi vì subject lúc đó mới phát Hello cách
+ Tới thời điểm 3.0 thì subject đã có Hello world ở 2.5 rồi, nên throttle sẽ phát được
+ 16:04:51.8 - 🔵 : H
+ 16:04:51.9 - 🔵 : He
+ 16:04:52.0 - 🔵 : Hel
+ 16:04:52.1 - 🔵 : Hell
+ 16:04:52.3 - 🔵 : Hello
+ 16:04:52.4 - 🔵 : Hello
+ 16:04:52.8 - 🔴 : Hello
+ 16:04:53.8 - 🔵 : Hello W
+ 16:04:54.1 - 🔵 : Hello Wo
+ 16:04:54.1 - 🔵 : Hello Wor
+ 16:04:54.4 - 🔵 : Hello Worl
+ 16:04:54.4 - 🔵 : Hello World
+ 16:04:54.8 - 🔴 : Hello World
+ Tóm tắt nhanh 2 em này:
+ debounce lúc nào source ngừng một khoảng thời gian theo cài đặt, thì sẽ phát đi giá trị mới nhất
+ throttle không quan tâm soucer dừng lại lúc nào, miễn tới thời gian điều tiết thì sẽ lấy giá trị (mới nhất hoặc đầu tiên trong khoảng thời gian điều tiết) để phát đi. Nếu không có chi thì sẽ âm thầm skip
+ */
