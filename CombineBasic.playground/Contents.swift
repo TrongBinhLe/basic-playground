@@ -309,7 +309,6 @@ formatter.numberStyle = .spellOut
         .sink(receiveValue: { print($0) })
         .store(in: &subscriptions3)
 // 3.2. -------------------- Map key path ---------------------
-
 struct Dog1 {
   var name: String
   var age: Int
@@ -391,13 +390,10 @@ flatMap giúp cho việc hợp nhất các stream của các publisher thành 1 
 Tất nhiên, khi các publisher riêng lẻ send các giá trị đi, thì chat vẫn nhận được và hợp chất chúng lại cho subcriber của nó.
 Cuối câu chuyện bạn cũng thấy là THUỶ ĐẬU đã join vào. Vì vậy, muốn khống chế số lượng publisher thì sử dụng thêm tham số maxPublishers */
 
-
 chat
   .flatMap(maxPublishers: .max(2)) { $0.message }
   .sink { print($0) }
   .store(in: &subscriptions)
-
-
 
 //--------4. REPLACING UPSTREAM OUTPUT --------
 //4.1. replaceNil(with:)
@@ -406,7 +402,6 @@ chat
         .sink { print($0) }
 //4.2. replaceEmpty(with:)
 let empty = Empty<Int, Never>()
-    
     empty
         .replaceEmpty(with: 1)
         .sink(receiveCompletion: { print($0) },
@@ -418,6 +413,7 @@ let empty = Empty<Int, Never>()
  Biển đổi từng phần tử của pub bằng toán tử scan với giá trị khởi tạo là 0
  Scan sẽ phát ra các phần tử mới bằng cách kết hợp 2 giá trị lại
  Cái khởi tạo là đầu tiên -> cái nhận được là thứ 2 -> cái tạo ra mới được phát đi và trở thành lại cái đầu tiên.*/
+
 //VD1
 let pub = (0...5).publisher
     
@@ -437,7 +433,6 @@ publs.scan([]) { numbers, value -> [Int] in
 }
 
 //-----------IV> COMBINE – FILTERING OPERATORS-----------------
-
 /**---1.1FILTER
  Sử dụng toán tử filter để tiến hành lọc các phần tử được phát ra từ publisher. Dễ hiểu nhất là thử làm việc với 1 closure trả về giá trị bool
  **/
@@ -879,6 +874,167 @@ DispatchQueue.main.async {
 sourcePublisher là 1 subject
 delayPublisher được tạo ra nhờ toán tử delay của publisher trên
 Tiến hành subscription và cứ mỗi giây cho sourcePublisher phát đi
-Thì sau 1 khoảng thời gian được cài đặt trên thì delayPublisher sẽ phát tiếp*/
+Thì sau 1 khoảng thời gian được cài đặt trên thì delayPublisher sẽ phát tiếp */
 
+// ------------2. COLLECTING VALUES ----------------
+
+let valuesPerSecond1 = 1.0
+let collectTimeStride1 = 4
+let sourcePublisher1 = PassthroughSubject<Int, Never>()
+let collectedPublisher1 = sourcePublisher
+        .collect(.byTime(DispatchQueue.main, .seconds(collectTimeStride1)))
+        .flatMap { dates in dates.publisher }
+//subscription
+sourcePublisher1
+    .sink(receiveCompletion: { print("\(Date()) - 🔵 complete: ", $0) }) { print("\(Date()) - 🔵: ", $0)}
+    .store(in: &subscriptions)
+collectedPublisher1
+   .sink(receiveCompletion: { print("\(Date()) - 🔴 complete: \($0)") }) { print("\(Date()) - 🔴: \($0)")}
+   .store(in: &subscriptions)
+DispatchQueue.main.async {
+    sourcePublisher1.send(0)
+  
+    var count = 1
+    Timer.scheduledTimer(withTimeInterval: 1.0 / valuesPerSecond, repeats: true) { _ in
+        sourcePublisher1.send(count)
+        count += 1
+        
+        if(count > 10 ){
+            sourcePublisher1.send(completion: .finished)
+        }
+    }
+}
+
+
+/*
+ Result :
+ 2020-03-02 08:49:01 +0000 - 🔵:  0
+ 2020-03-02 08:49:02 +0000 - 🔵:  1
+ 2020-03-02 08:49:03 +0000 - 🔵:  2
+ 2020-03-02 08:49:04 +0000 - 🔵:  3
+ 2020-03-02 08:49:05 +0000 - 🔴: 0
+ 2020-03-02 08:49:05 +0000 - 🔴: 1
+ 2020-03-02 08:49:05 +0000 - 🔴: 2
+ 2020-03-02 08:49:05 +0000 - 🔴: 3
+ 2020-03-02 08:49:05 +0000 - 🔵:  4
+ 2020-03-02 08:49:06 +0000 - 🔵:  5
+ 2020-03-02 08:49:07 +0000 - 🔵:  6
+ 2020-03-02 08:49:08 +0000 - 🔵:  7
+ 2020-03-02 08:49:09 +0000 - 🔴: 4
+ 2020-03-02 08:49:09 +0000 - 🔴: 5
+ 2020-03-02 08:49:09 +0000 - 🔴: 6
+ 2020-03-02 08:49:09 +0000 - 🔴: 7
+ 2020-03-02 08:49:09 +0000 - 🔵:  8
+ 2020-03-02 08:49:10 +0000 - 🔵:  9
+ ...
+ 
+ Tạo 1 publisher từ 1 PassthroughSubject với Output là Int
+ Tạo tiếp 1 publisher nữa từ publisher trên với toán tử collect
+ Tiến hành subscription 2 publisher để xem giá trị sau mỗi lần nhận được
+ Cho vào vòng lặp vô tận để quan sát kết quả
+ Ta thấy
+ Nếu không có flatMap thì cứ sau 1 khoản thời gian được cài đặt collectTimeStride thì các giá trị sẽ được thu thập. Và kiểu giá trị của nó là một Array
+ Sử dụng flatMap để biến đổi chúng cho dễ nhìn hơn
+ 
+ Bỏ flatMap thì kết quả in ra trông như thế này:
+ 2020-03-02 08:53:30 +0000 - 🔵:  0
+ 2020-03-02 08:53:31 +0000 - 🔵:  1
+ 2020-03-02 08:53:32 +0000 - 🔵:  2
+ 2020-03-02 08:53:33 +0000 - 🔵:  3
+ 2020-03-02 08:53:34 +0000 - 🔴: [0, 1, 2, 3]
+ 2020-03-02 08:53:34 +0000 - 🔵:  4
+ 2020-03-02 08:53:35 +0000 - 🔵:  5
+ 2020-03-02 08:53:36 +0000 - 🔵:  6
+ 2020-03-02 08:53:37 +0000 - 🔵:  7
+ 2020-03-02 08:53:38 +0000 - 🔴: [4, 5, 6, 7]
+ 2020-03-02 08:53:38 +0000 - 🔵:  8
+ 2020-03-02 08:53:39 +0000 - 🔵:  9
+ 2020-03-02 08:53:40 +0000 - 🔵:  10
+ 2020-03-02 08:53:41 +0000 - 🔵:  11
+ 2020-03-02 08:53:42 +0000 - 🔴: [8, 9, 10, 11]
+ 2020-03-02 08:53:42 +0000 - 🔵:  12
+ ...
+ let collectedPublisher2 = sourcePublisher
+         .collect(.byTimeOrCount(DispatchQueue.main, .seconds(collectTimeStride), collectMaxCount))
+         .flatMap { dates in dates.publisher }
+
+ Ta chú ý điểm byTimeOrCount, có nghĩa là:
+ Nếu đủ số lượng thu thập theo collectMaxCount –> thì sẽ bắn giá trị đi
+ Nếu chưa đủ giá trị mà tới thời gian thu thập collectTimeStride thì vẫn gom hàng và bắn
+ */
+
+
+//--------3. HOLDING OFF ON EVENT---------------
+
+//3.1. DEBOUNCE
+
+func printDate() -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm:ss.S"
+    return formatter.string(from: Date())
+}
+
+let typingHelloWord: [(TimeInterval, String)] = [
+      (0.0, "H"),
+      (0.1, "He"),
+      (0.2, "Hel"),
+      (0.3, "Hell"),
+      (0.5, "Hello"),
+      (0.6, "Hello "),
+      (2.0, "Hello W"),
+      (2.1, "Hello Wo"),
+      (2.2, "Hello Wor"),
+      (2.4, "Hello Worl"),
+      (2.5, "Hello World")
+]
+
+// subject
+let sub = PassthroughSubject<String, Never>()
+// debounce publisher
+
+let debounce = sub.debounce(for: .seconds(1.0), scheduler: DispatchQueue.main).share()
+// subscription
+sub.sink { string in
+    print("\(printDate()) - 🔵 : \(string)")
+}.store(in: &subscriptions)
+
+debounce.sink { string in
+    print("\(printDate()) - 🔴 : \(string)")
+}.store(in: &subscriptions)
+
+// loop
+
+let now = DispatchTime.now()
+for item in typingHelloWord {
+    DispatchQueue.main.asyncAfter(deadline: now + item.0) {
+        sub.send(item.1)
+    }
+}
+
+/*
+ Giải thích:
+ typingHelloWorld là để giả lập việc gõ bàn phím với kiểu dữ liệu là Array Typle gồm
+ Thời gian gõ
+ Ký tự gõ
+ Tạo subject với Output là String
+ Tạo tiếp debounce với time là 1.0 -> nghĩa là cứ sau 1 giây, nếu subject không biến động gì thì sẽ phát giá trị đi
+ hàm share() để đảm bảo tính đồng nhất khi có nhiều subcriber subscribe tới nó
+ Phần subscription để xem kết quả
+ For và hẹn giờ lần lượt theo dữ liệu giả lập để subject gởi giá trị đi.
+ 
+ 15:59:39.0 - 🔵 : H
+ 15:59:39.1 - 🔵 : He
+ 15:59:39.2 - 🔵 : Hel
+ 15:59:39.4 - 🔵 : Hell
+ 15:59:39.6 - 🔵 : Hello
+ 15:59:39.7 - 🔵 : Hello
+ 15:59:40.7 - 🔴 : Hello
+ 15:59:41.2 - 🔵 : Hello W
+ 15:59:41.2 - 🔵 : Hello Wo
+ 15:59:41.2 - 🔵 : Hello Wor
+ 15:59:41.7 - 🔵 : Hello Worl
+ 15:59:41.7 - 🔵 : Hello World
+ 15:59:42.7 - 🔴 : Hello World
+
+ */
 
