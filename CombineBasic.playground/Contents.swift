@@ -1085,3 +1085,29 @@ for item1 in typingHelloWord {
  debounce lúc nào source ngừng một khoảng thời gian theo cài đặt, thì sẽ phát đi giá trị mới nhất
  throttle không quan tâm soucer dừng lại lúc nào, miễn tới thời gian điều tiết thì sẽ lấy giá trị (mới nhất hoặc đầu tiên trong khoảng thời gian điều tiết) để phát đi. Nếu không có chi thì sẽ âm thầm skip
  */
+//-----------4.TIMING OUT -------------
+
+/*
+ Toán tử này rất chi là dễ hiểu, bạn cần set cho nó 1 thời gian.
+ Nếu quá thời gian đó mà publisher gốc không có phát bất cứ gì ra thì publisher timeout sẽ tự động kết thúc.
+ Còn nếu có giá trị gì mới được phát trong thời gian timeout thì sẽ tính lại từ đầu.
+ */
+
+enum TimeOutError: Error {
+    case timedOut
+}
+
+let subtimeout = PassthroughSubject<Void, TimeOutError>()
+
+let timeOutPublish = subtimeout.timeout(.seconds(5), scheduler: DispatchQueue.main, customError: {.timedOut})
+
+subtimeout.sink(receiveCompletion: {print("\(printDate()) - 🔵 completion: ", $0)}){_ in print("\(printDate()) - 🔵 : event")}.store(in: &subscriptions)
+timeOutPublish.sink(receiveCompletion: {print("\(printDate()) -  🔴 completion:", $0)}) { _ in print("\(printDate()) - 🔴 : event")}.store(in: &subscriptions)
+
+print("\(printDate()) - BEGIN")
+
+DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+    subtimeout.send()
+}
+
+
