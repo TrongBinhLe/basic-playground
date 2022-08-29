@@ -99,3 +99,53 @@ chéo nhưng lại bắt buộc phải có (tức là sử dụng let) - như tr
  sử dụng instance property của class đó, bạn sẽ có 1 reference cycle.
  Nói cách khác, object giữ 1 reference tới closure thông qua 1 stored property,
  closure lại giữ 1 reference tới object thông qua captured value of self*/
+
+
+/*--------------II.Capturing Self với Swift 4.2-----------*/
+// https://viblo.asia/p/capturing-self-voi-swift-42-3Q75wBmDlWb
+
+var dog = Dog()
+doSomething(then: {
+  dog.bark() // dog must be captured so it will live long enough
+})
+
+/**
+ Trình biên dịch Swift tự động quản lý việc này cho bạn. Con chó sẽ được lưu lại (do đó làm tăng reference đến nó)
+ và bạn có thể đảm bảo rằng mặc dù cá thể chó ra khỏi phạm vi hiện tại, block vẫn giữ nó.
+ Đôi khi bạn không muốn hành vi này. Lý do phổ biến nhất là trường hợp bạn cần gọi một phương thức self bên trong block.
+ Block sẽ giữ self và do đó tạo một biểu đồ phụ thuộc hai chiều, còn được gọi là retain cycle.
+ Việc này là rất nên tránh bởi vì nó có nghĩa là self không bao giờ có thể được giải phóng nếu block còn tồn tại. Thông thường, các block được lưu trữ dưới dạng các thuộc tính ví dụ hoặc dưới dạng observers cho KVO hoặc notifications và thời gian tồn tại của chúng bị ràng buộc với self.
+ Nếu bạn đã làm điều này, xin chúc mừng ... bạn đã bị rò rỉ bộ nhớ.
+
+ 
+ Tránh hiện tượng Retain Cycles
+ let dog = Dog()
+ doSomething(then: { [weak dog] in
+     // dog is now Optional<Dog>
+     dog?.bark()
+ )
+ 
+ hoac
+ 
+ doSomething(then: { [weak self] in
+     self?.doSomethingElse()
+ )
+ 
+ Bằng cách định nghĩa weak cho self, bạn đang nói với block là không thực hiện tham chiếu tới self.
+ 
+ 
+ Strong-Weak
+ 
+ Nếu bạn cần đảm bảo rằng các mục trong block thực thi, bạn có thể tạo một tham chiếu mạnh mới bên trong khối.
+ 
+ doSomething(then: { [weak self] in
+     guard let strongSelf = self { else return }
+     strongSelf.doSomethingElse()
+ )
+
+ Trong ví dụ trên, chúng ta đảm bảo rằng tham chiếu strongSelf của chúng ta tồn tại trong phạm vi của khối.
+ Phương pháp này khá phổ biến trong các dự án Swift, nhưng luôn cảm thấy hơi kỳ quặc.
+ Bạn cũng có thể viết thế này:
+ guard let `self` = self else { return }
+ 
+ */

@@ -327,7 +327,6 @@ publisher10
 //sink và store như bình thường
 
 // 3.3 -------------TRYMAP------------------------
-
 /*Khi bạn làm những việc liên quan tới nhập xuất, kiểm tra, media, file … thì hầu như phải sử dụng try catch nhiều. Nó giúp cho việc đảm bảo chương trình của bạn không bị crash. Tất nhiên, nhiều lúc bạn phải cần biến đổi từ kiểu giá trị này tới một số kiểu giá trị mà có khả năng sinh ra lỗi. Khi đó bạn hãy dùng tryMap như một cứu cánh. */
 
 Just("Đây là đường dẫn tới file XXX nè")
@@ -865,8 +864,15 @@ delayedPublisher
 
 //emit values by timer
 DispatchQueue.main.async {
-    Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+    var runCount = 0
+    Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
         sourcePublisher.send(Date())
+        runCount += 1
+        if runCount > 10 {
+            timer.invalidate()
+            runCount = 0
+            sourcePublisher.send(completion: .finished)
+        }
     }
 }
 
@@ -898,7 +904,6 @@ DispatchQueue.main.async {
     Timer.scheduledTimer(withTimeInterval: 1.0 / valuesPerSecond, repeats: true) { _ in
         sourcePublisher1.send(count)
         count += 1
-        
         if(count > 10 ){
             sourcePublisher1.send(completion: .finished)
         }
@@ -1085,7 +1090,7 @@ for item1 in typingHelloWord {
  debounce lúc nào source ngừng một khoảng thời gian theo cài đặt, thì sẽ phát đi giá trị mới nhất
  throttle không quan tâm soucer dừng lại lúc nào, miễn tới thời gian điều tiết thì sẽ lấy giá trị (mới nhất hoặc đầu tiên trong khoảng thời gian điều tiết) để phát đi. Nếu không có chi thì sẽ âm thầm skip
  */
-//-----------4.TIMING OUT -------------
+//--------------4.TIMING OUT ------------------------
 
 /*
  Toán tử này rất chi là dễ hiểu, bạn cần set cho nó 1 thời gian.
@@ -1110,4 +1115,122 @@ DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
     subtimeout.send()
 }
 
+//KQ:
+/*
+ 16:09:56.6 - BEGIN
+ 16:09:58.8 - 🔵 : event
+ 16:09:58.8 - 🔴 : event
+ 16:10:03.9 - 🔴 completion:  failure(__lldb_expr_17.TimeoutError.timedOut)
+ */
+//----------VII. COMBINE SEQUENCE OPERATORS---------------
+//----------1. FINDING VAULUES ---------------------------
 
+// ---------1.1. MIN ---------------
+
+
+//VD
+let minsub = [1, -50, 246, 7].publisher
+
+minsub.min().sink { value  in
+    print("lowest value is \(value)")
+}.store(in: &subscriptions)
+
+let minBy = ["12345",
+                   "ab",
+                   "hello world"]
+    .compactMap { $0.data(using: .utf8) } // [Data]
+    .publisher // Publisher<Data, Never>
+  minBy
+    .print("publisher")
+    .min(by: { $0.count < $1.count })
+    .sink(receiveValue: { data in
+      let string = String(data: data, encoding: .utf8)!
+      print("Smallest data is \(string), \(data.count) bytes")
+    })
+    .store(in: &subscriptions)
+
+/*
+ Trong đó, 1 Array String mà các phần tử trong đó khó so sánh. Nên
+ Dùng compactMap để biến đổi pulisher với Output là String thành publisher với Output là Data.
+ Vai trò toán tử compactMap giúp loại bỏ đi các phần thử không biến đổi được.
+ min(by:) sẽ dùng một closure để kiểm tra số byte của 1 phần tử
+ sink để subscribe và in ra giá trị như mình mong muốn
+ */
+
+//--------1.2.MAX---------------
+
+//Tương tự như min và cũng có 2 cách sử dụng cho 2 kiểu đối tượng (so sánh được & không so sánh được).
+let max = ["A", "F", "Z", "E"].publisher
+  max
+    .print("publisher")
+    .max()
+    .sink(receiveValue: { print("Highest value is \($0)") })
+    .store(in: &subscriptions)
+
+//---------1.3.FIRST-----------
+
+//---------1.5. LAST AND LAST(WHERE:)
+//Tương tự như first. Nhưng ngược lại. Chỉ khi nào publisher phát đi completion, thì mới tìm kiến phần tử giá trị cuối cùng được phát ra.
+let last = ["A", "B", "C"].publisher
+  last
+    .print("publisher")
+    .last()
+    .sink(receiveValue: { print("Last value is \($0)") })
+    .store(in: &subscriptions)
+
+//---------1.6.OUTPUT(AT:)
+//Tìm kiếm phần tử theo chỉ định index trên upstream của publisher.
+let outputPub = ["A", "B", "C"].publisher
+  outputPub
+    .print("publisher")
+    .output(at: 1)
+    .sink(receiveValue: { print("Value at index 1 is \($0)") })
+    .store(in: &subscriptions)
+//Khi nhận được B ở index (1), thì sẽ in giá trị ra và tự kết liễu mình.
+
+//----------1.7. OutPut(IN:)
+//Để lấy ra 1 lúc nhiều phần tử ở nhiều index khác nhau. Thay vì cung cấp 1 giá trị đơn lẽ, có thể cung cấp 1 array thứ tự cho toán tử output(in:)
+//Xem code ví dụ sau:
+
+
+ let outPutIN = ["A", "B", "C", "D", "E"].publisher
+    outPutIN
+    .output(in: 1...3)
+    .sink(receiveCompletion: { print($0) },
+          receiveValue: { print("Value in range: \($0)") })
+    .store(in: &subscriptions)
+
+//Sẽ lấy các giá trị trong range là 1, 2 và 3 trong các giá trị được publisher phát đi.
+
+//-----------2.4. ALLSATISFY --------------
+//Toán tử này sẽ phát ra giá trị là Bool khi tất cả các giá trị của publisher thoả mãn điều kiện của nó.
+//Xem code ví dụ sau:
+  // 1
+  let allSatisfy = stride(from: 0, to: 5, by: 2).publisher
+  // 2
+  allSatisfy
+    .print("publisher")
+    .allSatisfy { $0 % 2 == 0 }
+    .sink(receiveValue: { allEven in
+      print(allEven ? "All numbers are even"
+                    : "Something is odd...")
+    })
+    .store(in: &subscriptions)
+//Trong đó:
+//Tạo ra 1 publisher phát ra các giá trị từ 0 đến 5, với bước nhảy là 2. Nghĩa là 0, 2, 4
+//Kiểm tra điều kiện là tất cả giá trị của publisher đó đều chia hết cho 2 không
+
+
+
+//  --–```3. Future
+Đây cũng là 1 Publisher đặc biệt. Tìm hiểu thử:
+Là một Class
+Là một Publisher
+Đối tượng này sẽ phát ra một giá trị duy nhất, sau đó kết thúc hoặc fail.
+Nó sẽ thực hiện một lời hứa Promise. Đó là 1 closure với kiểu Result, nên sẽ có 1 trong 2 trường hợp:
+Success : phát ra Output
+Failure : phát ra Error
+Khi hoạt động
+Lần subscribe đầu tiên, nó sẽ thực hiện đầy đủ các thủ tục. Và phát ra giá trị, sau đó kết thúc hoặc thất bại
+Lần subscribe tiếp theo, chỉ phát ra giá trị cuối cùng. Bỏ qua các bước thủ thục khác.
+----
