@@ -1223,14 +1223,41 @@ let outputPub = ["A", "B", "C"].publisher
 
 
 //  --–```3. Future
-Đây cũng là 1 Publisher đặc biệt. Tìm hiểu thử:
-Là một Class
-Là một Publisher
-Đối tượng này sẽ phát ra một giá trị duy nhất, sau đó kết thúc hoặc fail.
-Nó sẽ thực hiện một lời hứa Promise. Đó là 1 closure với kiểu Result, nên sẽ có 1 trong 2 trường hợp:
-Success : phát ra Output
-Failure : phát ra Error
-Khi hoạt động
-Lần subscribe đầu tiên, nó sẽ thực hiện đầy đủ các thủ tục. Và phát ra giá trị, sau đó kết thúc hoặc thất bại
-Lần subscribe tiếp theo, chỉ phát ra giá trị cuối cùng. Bỏ qua các bước thủ thục khác.
-----
+//Đây cũng là 1 Publisher đặc biệt. Tìm hiểu thử:
+//Là một Class
+//Là một Publisher
+//Đối tượng này sẽ phát ra một giá trị duy nhất, sau đó kết thúc hoặc fail.
+//Nó sẽ thực hiện một lời hứa Promise. Đó là 1 closure với kiểu Result, nên sẽ có 1 trong 2 trường hợp:
+//Success : phát ra Output
+//Failure : phát ra Error
+//Khi hoạt động
+//Lần subscribe đầu tiên, nó sẽ thực hiện đầy đủ các thủ tục. Và phát ra giá trị, sau đó kết thúc hoặc thất bại
+//Lần subscribe tiếp theo, chỉ phát ra giá trị cuối cùng. Bỏ qua các bước thủ thục khác.
+//----
+func futureIncrement(
+  integer: Int,
+  afterDelay delay: TimeInterval) -> Future<Int, Never> {
+  Future<Int, Never> { promise in
+    print("Original")
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+      promise(.success(integer + 1))
+    }
+  }
+}
+DispatchQueue.main.async {
+  // publisher
+  let future = futureIncrement(integer: 1, afterDelay: 3)
+  // subscription 1
+  future
+    .sink(receiveCompletion: { print($0) },receiveValue: { print($0) })
+    .store(in: &subscriptions)
+  // subscription 2
+  future
+    .sink(receiveCompletion: { print("Second", $0) },receiveValue: { print("Second", $0) })
+    .store(in: &subscriptions)
+}
+
+
+//Có 1 function là futureIncrement dùng để phát đi 1 giá trị trong tương lai. Với kiểu returen là Future<Int, Never>
+//promise sẽ tăng giá trị và sau đó 1 khoản thời gian sẽ phát đi.
+//Vấn tiến hành subscription như cũ
